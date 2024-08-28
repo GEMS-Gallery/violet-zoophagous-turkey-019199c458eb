@@ -1,0 +1,34 @@
+type Shape = 
+ record {
+   color: text;
+   height: float64;
+   shapeType: text;
+   width: float64;
+   x: float64;
+   y: float64;
+ };
+type Result_1 = 
+ variant {
+   err: text;
+   ok: ProjectData;
+ };
+type Result = 
+ variant {
+   err: text;
+   ok: nat;
+ };
+type ProjectInfo = 
+ record {
+   id: nat;
+   name: text;
+ };
+type ProjectData = 
+ record {
+   name: text;
+   shapes: vec Shape;
+ };
+service : {
+  listProjects: () -> (vec ProjectInfo) query;
+  loadProject: (nat) -> (Result_1) query;
+  saveProject: (ProjectData) -> (Result);
+}
