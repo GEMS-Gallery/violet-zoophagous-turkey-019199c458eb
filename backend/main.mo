@@ -12,6 +12,7 @@ import Iter "mo:base/Iter";
 actor {
   // Types
   type Shape = {
+    id: Nat;
     shapeType: Text;
     x: Float;
     y: Float;
@@ -23,6 +24,8 @@ actor {
   type ProjectData = {
     name: Text;
     shapes: [Shape];
+    canvasWidth: Float;
+    canvasHeight: Float;
   };
 
   type ProjectInfo = {
@@ -32,6 +35,7 @@ actor {
 
   // Stable variables
   stable var nextProjectId: Nat = 0;
+  stable var nextShapeId: Nat = 0;
   stable var projectsEntries: [(Nat, ProjectData)] = [];
 
   // Initialize HashMap from stable variable
@@ -61,6 +65,13 @@ actor {
         { id = id; name = project.name }
       }
     ))
+  };
+
+  // Generate new shape ID
+  public func getNewShapeId(): async Nat {
+    let shapeId = nextShapeId;
+    nextShapeId += 1;
+    shapeId
   };
 
   // System functions for upgrades

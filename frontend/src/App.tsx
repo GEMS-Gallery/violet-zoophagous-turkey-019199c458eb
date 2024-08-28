@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AppBar, Toolbar, Typography, Button, Container, Paper, Box, TextField } from '@mui/material';
+import { AppBar, Toolbar, Typography, Button, Container, Paper, Box, TextField, IconButton } from '@mui/material';
+import DeleteIcon from '@mui/icons-material/Delete';
 import { backend } from 'declarations/backend';
 
 type Shape = {
+  id: number;
   shapeType: string;
   x: number;
   y: number;
@@ -17,11 +19,13 @@ const App: React.FC = () => {
   const [currentColor, setCurrentColor] = useState<string>('#000000');
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const [selectedShape, setSelectedShape] = useState<Shape | null>(null);
+  const [canvasSize, setCanvasSize] = useState<{ width: number; height: number }>({ width: 800, height: 600 });
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     drawShapes();
-  }, [shapes]);
+  }, [shapes, selectedShape, canvasSize]);
 
   const drawShapes = () => {
     const canvas = canvasRef.current;
@@ -47,6 +51,12 @@ const App: React.FC = () => {
         );
         ctx.fill();
       }
+
+      if (selectedShape && selectedShape.id === shape.id) {
+        ctx.strokeStyle = '#ff0000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(shape.x - 2, shape.y - 2, shape.width + 4, shape.height + 4);
+      }
     });
   };
 
@@ -58,54 +68,22 @@ const App: React.FC = () => {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    setIsDrawing(true);
-    setStartPoint({ x, y });
-  };
+    const clickedShape = shapes.find(shape =>
+      x >= shape.x && x <= shape.x + shape.width &&
+      y >= shape.y && y <= shape.y + shape.height
+    );
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !startPoint) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawShapes();
-
-    ctx.fillStyle = currentColor;
-    if (currentShape === 'rectangle') {
-      ctx.fillRect(
-        startPoint.x,
-        startPoint.y,
-        x - startPoint.x,
-        y - startPoint.y
-      );
-    } else if (currentShape === 'circle') {
-      const radius = Math.min(
-        Math.abs(x - startPoint.x),
-        Math.abs(y - startPoint.y)
-      ) / 2;
-      ctx.beginPath();
-      ctx.arc(
-        startPoint.x + (x - startPoint.x) / 2,
-        startPoint.y + (y - startPoint.y) / 2,
-        radius,
-        0,
-        2 * Math.PI
-      );
-      ctx.fill();
+    if (clickedShape) {
+      setSelectedShape(clickedShape);
+      setIsDrawing(false);
+    } else {
+      setIsDrawing(true);
+      setStartPoint({ x, y });
+      setSelectedShape(null);
     }
   };
 
-  const handleMouseUp = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !startPoint) return;
-
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -113,18 +91,80 @@ const App: React.FC = () => {
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
 
-    const newShape: Shape = {
-      shapeType: currentShape,
-      x: startPoint.x,
-      y: startPoint.y,
-      width: x - startPoint.x,
-      height: y - startPoint.y,
-      color: currentColor,
-    };
+    if (isDrawing && startPoint) {
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
 
-    setShapes([...shapes, newShape]);
-    setIsDrawing(false);
-    setStartPoint(null);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawShapes();
+
+      ctx.fillStyle = currentColor;
+      if (currentShape === 'rectangle') {
+        ctx.fillRect(
+          startPoint.x,
+          startPoint.y,
+          x - startPoint.x,
+          y - startPoint.y
+        );
+      } else if (currentShape === 'circle') {
+        const radius = Math.min(
+          Math.abs(x - startPoint.x),
+          Math.abs(y - startPoint.y)
+        ) / 2;
+        ctx.beginPath();
+        ctx.arc(
+          startPoint.x + (x - startPoint.x) / 2,
+          startPoint.y + (y - startPoint.y) / 2,
+          radius,
+          0,
+          2 * Math.PI
+        );
+        ctx.fill();
+      }
+    } else if (selectedShape) {
+      const updatedShapes = shapes.map(shape =>
+        shape.id === selectedShape.id
+          ? { ...shape, x: x - shape.width / 2, y: y - shape.height / 2 }
+          : shape
+      );
+      setShapes(updatedShapes);
+      setSelectedShape({ ...selectedShape, x: x - selectedShape.width / 2, y: y - selectedShape.height / 2 });
+    }
+
+    // Check if we need to resize the canvas
+    const margin = 50;
+    if (x > canvasSize.width - margin || y > canvasSize.height - margin) {
+      setCanvasSize({
+        width: Math.max(canvasSize.width, x + margin),
+        height: Math.max(canvasSize.height, y + margin)
+      });
+    }
+  };
+
+  const handleMouseUp = async (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (isDrawing && startPoint) {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+
+      const shapeId = await backend.getNewShapeId();
+      const newShape: Shape = {
+        id: shapeId,
+        shapeType: currentShape,
+        x: startPoint.x,
+        y: startPoint.y,
+        width: x - startPoint.x,
+        height: y - startPoint.y,
+        color: currentColor,
+      };
+
+      setShapes([...shapes, newShape]);
+      setIsDrawing(false);
+      setStartPoint(null);
+    }
   };
 
   const handleSave = async () => {
@@ -138,6 +178,8 @@ const App: React.FC = () => {
           width: Number(shape.width),
           height: Number(shape.height),
         })),
+        canvasWidth: canvasSize.width,
+        canvasHeight: canvasSize.height,
       };
       const result = await backend.saveProject(projectData);
       console.log('Project saved:', result);
@@ -153,6 +195,14 @@ const App: React.FC = () => {
       // Implement project selection and loading logic here
     } catch (error) {
       console.error('Error loading projects:', error);
+    }
+  };
+
+  const handleDeleteShape = () => {
+    if (selectedShape) {
+      const updatedShapes = shapes.filter(shape => shape.id !== selectedShape.id);
+      setShapes(updatedShapes);
+      setSelectedShape(null);
     }
   };
 
@@ -183,6 +233,9 @@ const App: React.FC = () => {
             >
               Circle
             </Button>
+            <IconButton onClick={handleDeleteShape} disabled={!selectedShape}>
+              <DeleteIcon />
+            </IconButton>
           </Box>
           <Box sx={{ mb: 2 }}>
             <TextField
@@ -193,8 +246,8 @@ const App: React.FC = () => {
           </Box>
           <canvas
             ref={canvasRef}
-            width={800}
-            height={600}
+            width={canvasSize.width}
+            height={canvasSize.height}
             style={{ border: '1px solid #000' }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}

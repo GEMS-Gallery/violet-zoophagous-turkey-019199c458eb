@@ -2,6 +2,7 @@ type Shape =
  record {
    color: text;
    height: float64;
+   id: nat;
    shapeType: text;
    width: float64;
    x: float64;
@@ -24,10 +25,13 @@ type ProjectInfo =
  };
 type ProjectData = 
  record {
+   canvasHeight: float64;
+   canvasWidth: float64;
    name: text;
    shapes: vec Shape;
  };
 service : {
+  getNewShapeId: () -> (nat);
   listProjects: () -> (vec ProjectInfo) query;
   loadProject: (nat) -> (Result_1) query;
   saveProject: (ProjectData) -> (Result);
